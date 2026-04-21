@@ -34,6 +34,9 @@
       gameOverText: 'Game Over',
       restartButtonText: 'Play Again',
       scoreText: 'Score',
+      playerNameText: 'Save your name',
+      playerNamePlaceholder: 'Enter your name',
+      playerNameButtonText: 'Save',
 
       // Basic Callbacks
       onStart: function(){},
@@ -206,6 +209,10 @@
     _$gameover: null,
     _$score: null,
     _$scoreText: null,
+    _$playerNameInput: null,
+
+    // Player name storage
+    playerName: null,
 
 
     // Canvas
@@ -1260,9 +1267,26 @@
         '<div class="blockrain-game-over-holder" style="position:absolute;">'+
           '<div class="blockrain-game-over">'+
             '<div class="blockrain-game-over-msg">'+ this.options.gameOverText +'</div>'+
+            '<div class="blockrain-player-name-section" style="margin: 15px 0;">'+
+              '<div class="blockrain-player-name-label" style="font-size: 14px; margin-bottom: 8px;">'+ this.options.playerNameText +'</div>'+
+              '<input type="text" class="blockrain-player-name-input" placeholder="'+ this.options.playerNamePlaceholder +'" style="padding: 8px; width: 200px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;"/>'+
+              '<a class="blockrain-btn blockrain-save-name-btn" style="display: inline-block; margin-left: 10px;">'+ this.options.playerNameButtonText +'</a>'+
+            '</div>'+
             '<a class="blockrain-btn blockrain-game-over-btn">'+ this.options.restartButtonText +'</a>'+
           '</div>'+
         '</div>').hide();
+      
+      game._$playerNameInput = game._$gameover.find('.blockrain-player-name-input');
+      
+      game._$gameover.find('.blockrain-save-name-btn').click(function(event){
+        event.preventDefault();
+        var name = game._$playerNameInput.val().trim();
+        if( name ) {
+          game.playerName = name;
+          console.log('Player name saved: ' + game.playerName);
+        }
+      });
+      
       game._$gameover.find('.blockrain-game-over-btn').click(function(event){
         event.preventDefault();
         game.restart();
