@@ -1283,9 +1283,18 @@
         var name = game._$playerNameInput.val().trim();
         if( name ) {
           game.playerName = name;
-          console.log('Player name saved: ' + game.playerName);
+          var score = game._filled.score;
+          BlockrainLeaderboard.saveScore(name, score, function() {
+            game._$playerNameInput.val('');
+            game._$gameover.find('.blockrain-save-status').text('Score saved!').show();
+          });
         }
       });
+
+      // Status message element
+      game._$gameover.find('.blockrain-player-name-section').append(
+        $('<div class="blockrain-save-status" style="color:#4bd838; font-size:13px; margin-top:6px; display:none;"></div>')
+      );
       
       game._$gameover.find('.blockrain-game-over-btn').click(function(event){
         event.preventDefault();
@@ -1755,3 +1764,47 @@ window.BlockrainThemes = {
     innerStroke: null
   },
 };
+/* =============================================
+   BlockrainLeaderboard — persistent score store
+   Uses localStorage as a simple JSON database.
+   Keys: blockrain_scores  (array of {id, name, score, date})
+   ============================================= */
+var BlockrainLeaderboard = (function() {
+  var KEY = 'blockrain_scores';
+
+  function load() {
+    try {
+      return JSON.parse(localStorage.getItem(KEY) || '[]');
+    } catch(e) { return []; }
+  }
+
+  function save(scores) {
+    try { localStorage.setItem(KEY, JSON.stringify(scores)); } catch(e) {}
+  }
+
+  return {
+    saveScore: function(name, score, callback) {
+      var scores = load();
+      scores.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+        name: name,
+        score: score,
+        date: new Date().toLocaleDateString()
+      });
+      // Keep top 100
+      scores.sort(function(a,b){ return b.score - a.score; });
+      scores = scores.slice(0, 100);
+      save(scores);
+      if (typeof callback === 'function') callback();
+      // Notify any leaderboard UI on the page
+      if (typeof BlockrainLeaderboard.onSave === 'function') BlockrainLeaderboard.onSave(scores);
+    },
+    getScores: function() {
+      return load();
+    },
+    clearScores: function() {
+      save([]);
+    },
+    onSave: null // hook for UI refresh
+  };
+})();

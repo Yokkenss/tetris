@@ -1,0 +1,30 @@
+services:
+
+  # ── Static game frontend (nginx) ──────────────────────────────────────────
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"           # Open http://localhost:8080 in your browser
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./blockrain.jquery.js:/usr/share/nginx/html/blockrain.jquery.js:ro
+      - ./blockrain.css:/usr/share/nginx/html/blockrain.css:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── Score API (Node.js + SQLite) ──────────────────────────────────────────
+  api:
+    build:
+      context: ./tetris-server
+      dockerfile: Dockerfile
+    environment:
+      - DB_PATH=/app/data/scores.db
+    volumes:
+      - scores-data:/app/data   # Scores survive container restarts
+    restart: unless-stopped
+    # API is NOT exposed directly — nginx proxies /api/* to it
+
+volumes:
+  scores-data:              # Named volume: persists the SQLite database file

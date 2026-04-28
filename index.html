@@ -2,17 +2,283 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Blockrain</title>
+  <title>Blockrain — Leaderboard</title>
   <link rel="stylesheet" href="blockrain.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    h1 {
+      font-size: 28px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #f1fa1e;
+      margin-bottom: 24px;
+      text-shadow: 0 0 12px rgba(241,250,30,0.4);
+    }
+
+    .layout {
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+    }
+
+    #game {
+      width: 300px;
+      height: 600px;
+      flex-shrink: 0;
+    }
+
+    /* ── Leaderboard panel ── */
+    .lb-panel {
+      width: 240px;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .lb-panel-header {
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .lb-panel-title {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #f1fa1e;
+    }
+
+    .lb-clear-btn {
+      background: none;
+      border: 1px solid #333;
+      color: #555;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 3px 8px;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .lb-clear-btn:hover { color: #fa1e1e; border-color: #fa1e1e; }
+
+    .lb-list {
+      list-style: none;
+      max-height: 562px;
+      overflow-y: auto;
+    }
+
+    .lb-list::-webkit-scrollbar { width: 3px; }
+    .lb-list::-webkit-scrollbar-track { background: #0d0d0d; }
+    .lb-list::-webkit-scrollbar-thumb { background: #2a2a2a; }
+
+    .lb-empty {
+      padding: 40px 16px;
+      text-align: center;
+      color: #333;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .lb-error {
+      padding: 16px;
+      text-align: center;
+      color: #fa1e1e;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .lb-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-bottom: 1px solid #161616;
+      gap: 8px;
+    }
+    .lb-row:hover { background: #151515; }
+
+    @keyframes flashRow {
+      0%   { background: rgba(75,216,56,0.15); }
+      100% { background: transparent; }
+    }
+    .lb-row.new-entry { animation: flashRow 1.2s ease; }
+
+    .lb-rank {
+      width: 20px;
+      font-size: 11px;
+      color: #444;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .lb-rank.gold   { color: #f1fa1e; }
+    .lb-rank.silver { color: #999; }
+    .lb-rank.bronze { color: #f5821f; }
+
+    .lb-name {
+      flex: 1;
+      font-size: 12px;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lb-score {
+      font-size: 12px;
+      color: #4bd838;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    /* Style blockrain inputs to match dark theme */
+    .blockrain-player-name-input {
+      background: #0d0d0d !important;
+      color: #fff !important;
+      border: 1px solid #444 !important;
+      border-radius: 3px !important;
+      font-family: 'Courier New', monospace !important;
+    }
+    .blockrain-player-name-input::placeholder { color: #555 !important; }
+  </style>
 </head>
 <body>
 
-  <div id="game" style="width: 400px; height: 600px;"></div>
+  <h1>Blockrain</h1>
+
+  <div class="layout">
+    <div id="game"></div>
+
+    <div class="lb-panel">
+      <div class="lb-panel-header">
+        <span class="lb-panel-title">High Scores</span>
+        <button class="lb-clear-btn" onclick="clearScores()">Clear</button>
+      </div>
+      <ul class="lb-list" id="lb-list">
+        <li class="lb-empty">Loading...</li>
+      </ul>
+    </div>
+  </div>
 
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="blockrain.jquery.js"></script>
   <script>
-    $('#game').blockrain();
+    var API = '/api';
+    var lastNewId = null;
+
+    // ── API helpers ────────────────────────────────────────────────────────
+    function apiGet(path, cb) {
+      fetch(API + path)
+        .then(function(r) { return r.json(); })
+        .then(cb)
+        .catch(function() { cb(null); });
+    }
+
+    function apiPost(path, body, cb) {
+      fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+        .then(function(r) { return r.json(); })
+        .then(cb)
+        .catch(function() { cb(null); });
+    }
+
+    function apiDelete(path, cb) {
+      fetch(API + path, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(cb)
+        .catch(function() { if (cb) cb(null); });
+    }
+
+    // ── Wire BlockrainLeaderboard to the real API ─────────────────────────
+    BlockrainLeaderboard.saveScore = function(name, score, callback) {
+      apiPost('/scores', { name: name, score: score }, function(data) {
+        if (data && data.id) {
+          lastNewId = data.id;
+          if (typeof callback === 'function') callback();
+          loadAndRender();
+        } else {
+          if (typeof callback === 'function') callback();
+          // Show error in status
+          var status = document.querySelector('.blockrain-save-status');
+          if (status) { status.style.color = '#fa1e1e'; status.textContent = 'Could not reach server.'; status.style.display = 'block'; }
+        }
+      });
+    };
+
+    // ── Leaderboard rendering ──────────────────────────────────────────────
+    function rankClass(i) {
+      return i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    }
+    function rankLabel(i) {
+      return i === 0 ? '&#9733;' : (i + 1) + '';
+    }
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function renderScores(scores, highlightId) {
+      var list = document.getElementById('lb-list');
+
+      if (scores === null) {
+        list.innerHTML = '<li class="lb-error">Cannot connect to server.<br>Make sure <code>node server.js</code> is running on port 3000.</li>';
+        return;
+      }
+      if (!scores.length) {
+        list.innerHTML = '<li class="lb-empty">No scores yet.<br>Play to get on the board!</li>';
+        return;
+      }
+
+      var html = '';
+      scores.forEach(function(s, i) {
+        var isNew = highlightId && s.id === highlightId ? ' new-entry' : '';
+        html +=
+          '<li class="lb-row' + isNew + '">' +
+            '<span class="lb-rank ' + rankClass(i) + '">' + rankLabel(i) + '</span>' +
+            '<span class="lb-name">' + escHtml(s.name) + '</span>' +
+            '<span class="lb-score">' + Number(s.score).toLocaleString() + '</span>' +
+          '</li>';
+      });
+      list.innerHTML = html;
+    }
+
+    function loadAndRender() {
+      apiGet('/scores', function(scores) {
+        renderScores(scores, lastNewId);
+      });
+    }
+
+    function clearScores() {
+      if (!confirm('Clear all high scores from the database?')) return;
+      apiDelete('/scores', function() { loadAndRender(); });
+    }
+
+    // ── Init game ──────────────────────────────────────────────────────────
+    $('#game').blockrain({ theme: 'retro' });
+
+    // Initial leaderboard load
+    loadAndRender();
+
+    // Refresh leaderboard every 30s (useful if multiple players on same server)
+    setInterval(loadAndRender, 30000);
   </script>
 
 </body>
